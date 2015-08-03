@@ -8,6 +8,7 @@
 
 import UIKit
 import SpriteKit
+import AVFoundation
 
 extension SKNode {
     class func unarchiveFromFile(file : String) -> SKNode? {
@@ -30,11 +31,45 @@ class GameViewController: UIViewController {
     var scene: GameScene!
     var level: Level!
     
+    var movesLeft = 0
+    var score = 0
+    
+    @IBOutlet weak var targetLabel: UILabel!
+    @IBOutlet weak var movesLabel: UILabel!
+    @IBOutlet weak var scoreLabel: UILabel!
+    @IBOutlet weak var gameoverPanel: UIImageView!
+    @IBOutlet weak var shuffleButton: UIButton!
+    
+    var tapGestureRecognizer: UITapGestureRecognizer!
+    
+    lazy var backgroundMusic: AVAudioPlayer = {
+        let url = NSBundle.mainBundle().URLForResource("Sounds/Mining by Moonlight", withExtension: "mp3")
+        let player = AVAudioPlayer(contentsOfURL: url, error: nil)
+        player.numberOfLoops = -1
+        return player
+    }()
+
+
+    @IBAction func shuffleButtonPressed(sender: UIButton) {
+        shuffle()
+        decreaseMoves()
+    }
+    
     func beginGame() {
+        movesLeft = level.maximumMoves
+        score = 0
+        updateLabels()
+        level.resetComboMultipler()
+        
+        scene.animateBeginGame() {
+            self.shuffleButton.hidden = false
+        }
+        
         shuffle()
     }
     
     func shuffle() {
+        scene.removeAllCookieSprites()
         var newCookies = level.shuffle()
         scene.addSpritesForCookies(newCookies)
     }
@@ -62,6 +97,13 @@ class GameViewController: UIViewController {
         }
         
         scene.animateMatchedCookies(chains) {
+            
+            for chain in chains {
+                self.score += chain.score
+            }
+            
+            self.updateLabels()
+            
             let cookies = self.level.fillHoles()
             self.scene.animateFallingCookies(cookies) {
                 let columns = self.level.topUpCookies()
@@ -74,7 +116,52 @@ class GameViewController: UIViewController {
     
     func beginNextTurn() {
         level.detectPossibleSwaps()
+        level.resetComboMultipler()
+        updateLabels()
         view.userInteractionEnabled = true
+        decreaseMoves()
+    }
+    
+    func updateLabels() {
+        targetLabel.text = String(format: "%1d", self.level.targetScore)
+        movesLabel.text = String(format: "%1d", self.movesLeft)
+        scoreLabel.text = String(format: "%1d", self.score)
+    }
+    
+    func decreaseMoves() {
+        --movesLeft
+        updateLabels()
+        
+        if score >= level.targetScore {
+            gameoverPanel.image = UIImage(named: "LevelComplete")
+            showGameover()
+        }
+        else if movesLeft <= 0{
+            gameoverPanel.image = UIImage(named: "GameOver")
+            showGameover()
+        }
+    }
+    
+    func showGameover() {
+        gameoverPanel.hidden = false
+        scene.userInteractionEnabled = false
+        
+        shuffleButton.hidden = true
+        
+        scene.animateGameOver() {
+            self.tapGestureRecognizer = UITapGestureRecognizer(target: self, action: "hideGameover")
+            self.view.addGestureRecognizer(self.tapGestureRecognizer)
+        }
+    }
+    
+    func hideGameover() {
+        view.removeGestureRecognizer(tapGestureRecognizer)
+        tapGestureRecognizer = nil
+        
+        gameoverPanel.hidden = true
+        scene.userInteractionEnabled = true
+        
+        beginGame()
     }
     
     override func prefersStatusBarHidden() -> Bool {
@@ -101,12 +188,16 @@ class GameViewController: UIViewController {
         scene.scaleMode = .AspectFill
         scene.swapHandler = handleSwap
         
+        gameoverPanel.hidden = true
+        
         skView.presentScene(scene)
         
         level = Level(filename: "Levels/Level_3")
         scene.level = level
         
         scene.addTiles()
+
+        backgroundMusic.play()
         
         beginGame()
     }

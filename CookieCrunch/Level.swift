@@ -16,6 +16,10 @@ class Level {
     private var tiles = Array2D<Tile>(columns: NumColumns, rows: NumRows)
     private var possibleSwaps = Set<Swap>()
     
+    var targetScore = 0
+    var maximumMoves = 0
+    var comboMultipler = 0
+    
     init(filename: String) {
         if let dictionary =
             Dictionary<String, AnyObject>.loadJSONFromBundle(filename) {
@@ -29,6 +33,8 @@ class Level {
                         }
                     }
                 }
+                self.targetScore = dictionary["targetScore"] as! Int
+                self.maximumMoves = dictionary["moves"] as! Int
             }
         }
     }
@@ -123,6 +129,9 @@ class Level {
         removeCookies(horizontalChains)
         removeCookies(verticalChains)
         
+        calculateScores(horizontalChains)
+        calculateScores(verticalChains)
+        
         return horizontalChains.union(verticalChains)
     }
     
@@ -182,6 +191,10 @@ class Level {
         }
         
         return columns
+    }
+    
+    func resetComboMultipler() {
+        comboMultipler = 1
     }
     
     private func createInitialCookies() -> Set<Cookie> {
@@ -294,6 +307,13 @@ class Level {
             for cookie in chain.cookies {
                 cookies[cookie.column, cookie.row] = nil
             }
+        }
+    }
+    
+    private func calculateScores(chains: Set<Chain>) {
+        for chain in chains {
+            chain.score = (chain.length - 2) * 60 * comboMultipler
+            ++comboMultipler
         }
     }
 }
